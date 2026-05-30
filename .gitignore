@@ -1,0 +1,13 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# Excel temporary / lock files
+~$*
+
+# Local env / secrets (if added later)
+.env
+.env.*
