@@ -238,6 +238,103 @@
     /* Tip */
     .tip { font-size: 11.5px; color: #888; margin-top: 5px; }
 
+    .track-cell { min-width: 128px; vertical-align: middle; }
+    .track-express {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      color: #888;
+      margin-top: 4px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .track-express input { cursor: pointer; }
+    .track-express.on { color: #e65100; font-weight: 700; }
+
+    .cell-other { min-width: 88px; }
+    .btn-other {
+      background: #eceff1;
+      color: #37474f;
+      font-size: 11px;
+      padding: 4px 8px;
+      border: 1px solid #cfd8dc;
+      border-radius: 3px;
+    }
+    .btn-other:hover { background: #cfd8dc; }
+    .btn-other.has-items { background: #e8f5e9; border-color: #81c784; color: #2e7d32; font-weight: 700; }
+    .other-summary { font-size: 10px; color: #666; margin-top: 3px; line-height: 1.3; max-width: 120px; }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 8px;
+      width: min(520px, 100%);
+      max-height: 85vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .modal-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid #e8eaed;
+      font-weight: 700;
+      color: #1a73e8;
+      font-size: 14px;
+    }
+    .modal-search {
+      padding: 10px 18px;
+      border-bottom: 1px solid #e8eaed;
+      background: #fafafa;
+    }
+    .modal-search input {
+      width: 100%;
+      border: 1px solid #d0d7de;
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+    }
+    .modal-search input:focus {
+      border-color: #1a73e8;
+      box-shadow: 0 0 0 2px rgba(26,115,232,0.15);
+    }
+    .modal-empty {
+      text-align: center;
+      color: #999;
+      font-size: 13px;
+      padding: 24px 0;
+    }
+    .modal-body { padding: 12px 18px; overflow-y: auto; }
+    .modal-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .modal-row:last-child { border-bottom: none; }
+    .modal-row-name { flex: 1; font-size: 12.5px; text-align: left; }
+    .modal-footer {
+      padding: 12px 18px;
+      border-top: 1px solid #e8eaed;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
     @media (max-width: 768px) {
       .form-row { flex-direction: column; }
     }
@@ -276,7 +373,8 @@
                oninput="onStartTrackChange()">
       </div>
       <div style="align-self:flex-end; font-size:12px; color:#888; padding-bottom:8px">
-        每添加一条订单，单号自动 +1
+        每添加一条订单，单号自动 +1；E = 快递，可在每行单独勾选
+        <span id="trackPreview"></span>
       </div>
     </div>
     <div class="form-group">
@@ -342,7 +440,7 @@
         <span class="leg-dot" style="background:#e65100"></span>大黄 = Selsun黄色洗发水375ml
       </span>
       <span class="leg-item" style="background:#eceff1; color:#263238">
-        <span class="leg-dot" style="background:#546e7a"></span>其他 = 合生元婴幼儿有机奶粉3段800g
+        <span class="leg-dot" style="background:#546e7a"></span>其他 = 点击订单行内按钮选择品类及数量
       </span>
     </div>
 
@@ -363,20 +461,50 @@
 
 <div class="toast" id="toast"></div>
 
+<div class="modal-overlay" id="otherModal" onclick="if(event.target===this) closeOtherModal()">
+  <div class="modal">
+    <div class="modal-header">选择「其他」品类及数量</div>
+    <div class="modal-search">
+      <input type="text" id="otherSearch" placeholder="搜索物品名称或条形码…"
+             autocomplete="off" oninput="filterOtherModal()">
+    </div>
+    <div class="modal-body">
+      <div id="otherModalList"></div>
+      <div id="otherModalEmpty" class="modal-empty" style="display:none">无匹配物品</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" style="background:#eee;color:#333" onclick="closeOtherModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveOtherModal()">确定</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ===================== 品类数据 =====================
-const ITEMS = [
+const MAIN_ITEMS = [
   { key: '黄',   name: 'Selsun黄色洗发水200ml',            barcode: '041167266038'  },
   { key: '蓝',   name: 'Selsun蓝色去屑控油洗发水200ml',     barcode: '41167660317'   },
   { key: '紫',   name: 'Selsun紫色洗发水200ml',             barcode: '041167662014'  },
   { key: '绿',   name: 'Selsun绿色洗发水200ml',             barcode: '9351791001006' },
-  { key: '大黄', name: 'Selsun黄色洗发水375ml',             barcode: '041167266069'  },
-  { key: '其他', name: 'Biostime合生元婴幼儿有机奶粉3段800g', barcode: '9311770608213' }
+  { key: '大黄', name: 'Selsun黄色洗发水375ml',             barcode: '041167266069'  }
+];
+
+const OTHER_ITEMS = [
+  { name: 'Biostime合生元婴幼儿有机奶粉3段800g', barcode: '9311770608213' },
+  { name: 'Coles成人脱脂奶粉1kg', barcode: '9300601427505' },
+  { name: 'Coles全脂成人奶粉1kg', barcode: '9310645423364' },
+  { name: 'Mecca防晒黑管SPF50+', barcode: '9331259013789' },
+  { name: 'Mecca脸部防晒霜30ml', barcode: '9331259020923' },
+  { name: 'Mecca身体防晒霜200ml', barcode: '9331259020848' },
+  { name: 'Ferro-Grad C铁+维生素C 成人补铁片 30粒/瓶', barcode: '5099151014337' },
+  { name: 'Ferro-grad铁元素+维生素C片90粒', barcode: '9350299013955' },
+  { name: 'Cetaphil丝塔芙baby保湿润肤霜大白罐566g', barcode: '3499320017169' }
 ];
 
 // ===================== 订单状态 =====================
 let orders = [];
 let nextOffset = 0;
+let editingOtherOrderId = null;
 
 // ===================== 单号工具 =====================
 function parseStartTrack() {
@@ -386,11 +514,36 @@ function parseStartTrack() {
   return { prefix: m[1], num: parseInt(m[2], 10), len: m[2].length, suffix: m[3] };
 }
 
-function makeTrackNum(offset) {
+function makeTrackNum(offset, express) {
   const p = parseStartTrack();
   if (!p) return '';
   const n = p.num + offset;
-  return p.prefix + String(n).padStart(p.len, '0') + p.suffix;
+  const suffix = express ? 'E' : '';
+  return p.prefix + String(n).padStart(p.len, '0') + suffix;
+}
+
+function defaultExpressForNewOrder() {
+  // First order matches start waybill exactly; later orders default to express (E)
+  if (orders.length === 0) {
+    const p = parseStartTrack();
+    return !!(p && p.suffix);
+  }
+  return true;
+}
+
+function updateTrackPreview() {
+  const preview = document.getElementById('trackPreview');
+  const p = parseStartTrack();
+  if (!p) {
+    preview.textContent = '';
+    return;
+  }
+  const next = makeTrackNum(orders.length, defaultExpressForNewOrder());
+  if (!next) {
+    preview.textContent = '';
+    return;
+  }
+  preview.textContent = `（下一条：${next}）`;
 }
 
 function onStartTrackChange() {
@@ -514,13 +667,15 @@ function addOrder() {
   const order = {
     id: Date.now() + Math.random(),
     offset: nextOffset++,
+    express: defaultExpressForNewOrder(),
     name:       parsed.name,
     mobile:     parsed.mobile,
     province:   parsed.province,
     city:       parsed.city,
     district:   parsed.district,
     addrStr:    parsed.addrStr,
-    quantities: new Array(ITEMS.length).fill(0)
+    quantities: new Array(MAIN_ITEMS.length).fill(0),
+    otherQuantities: new Array(OTHER_ITEMS.length).fill(0)
   };
 
   orders.push(order);
@@ -540,18 +695,25 @@ function renderTable() {
 
   if (orders.length === 0) {
     tbody.innerHTML = '<tr><td colspan="15" class="empty-hint">暂无订单，请在上方填写地址后点击「添加」</td></tr>';
+    updateTrackPreview();
     return;
   }
 
   tbody.innerHTML = '';
   orders.forEach((o, idx) => {
+    migrateOrder(o);
     const tr = document.createElement('tr');
     tr.dataset.id = o.id;
 
-    const tn = makeTrackNum(o.offset);
+    const tn = makeTrackNum(o.offset, o.express);
+    const expressHtml = `
+        <label class="track-express${o.express ? ' on' : ''}">
+          <input type="checkbox"${o.express ? ' checked' : ''}
+            onchange="setExpress(${o.id}, this.checked)"> E 快递
+        </label>`;
 
-    // Qty selects
-    const qtyHtml = ITEMS.map((_, i) => {
+    // Qty selects (main items)
+    const qtyHtml = MAIN_ITEMS.map((_, i) => {
       const val = o.quantities[i];
       const cls = val > 0 ? 'qty nonzero' : 'qty';
       const opts = [0,1,2,3,4,5,6,7,8]
@@ -560,9 +722,15 @@ function renderTable() {
       return `<td><select class="${cls}" onchange="setQty(${o.id},${i},this)">${opts}</select></td>`;
     }).join('');
 
+    const otherSummary = formatOtherSummary(o);
+    const otherBtnCls = otherSummary.total > 0 ? 'btn-other has-items' : 'btn-other';
+
     tr.innerHTML = `
       <td class="row-idx">${idx + 1}</td>
-      <td class="track-num">${tn || '<span style="color:#ccc">—</span>'}</td>
+      <td class="track-cell">
+        <div class="track-num">${tn || '<span style="color:#ccc">—</span>'}</div>
+        ${expressHtml}
+      </td>
       <td><input class="cell-input" value="${esc(o.name)}"
             oninput="setField(${o.id},'name',this.value)" style="width:54px"></td>
       <td><input class="cell-input" value="${esc(o.province)}"
@@ -577,10 +745,15 @@ function renderTable() {
       <td><input class="cell-input" value="${esc(o.mobile)}"
             oninput="setField(${o.id},'mobile',this.value)" style="width:102px"></td>
       ${qtyHtml}
+      <td class="cell-other">
+        <button class="btn ${otherBtnCls}" onclick="openOtherModal(${o.id})">选择</button>
+        <div class="other-summary">${otherSummary.html}</div>
+      </td>
       <td><button class="btn btn-danger" onclick="removeOrder(${o.id})">删除</button></td>
     `;
     tbody.appendChild(tr);
   });
+  updateTrackPreview();
 }
 
 function esc(s) {
@@ -596,9 +769,116 @@ function setQty(id, itemIdx, sel) {
   sel.className = val > 0 ? 'qty nonzero' : 'qty';
 }
 
+function ensureOtherQuantities(order) {
+  if (!order.otherQuantities) {
+    order.otherQuantities = new Array(OTHER_ITEMS.length).fill(0);
+  } else if (order.otherQuantities.length < OTHER_ITEMS.length) {
+    while (order.otherQuantities.length < OTHER_ITEMS.length) order.otherQuantities.push(0);
+  }
+  return order.otherQuantities;
+}
+
+function migrateOrder(order) {
+  if (order.express === undefined) order.express = true;
+  if (order.quantities && order.quantities.length > MAIN_ITEMS.length) {
+    ensureOtherQuantities(order);
+    if (!order.otherQuantities[0] && order.quantities[MAIN_ITEMS.length] > 0) {
+      order.otherQuantities[0] = order.quantities[MAIN_ITEMS.length];
+    }
+    order.quantities = order.quantities.slice(0, MAIN_ITEMS.length);
+  }
+  if (!order.quantities || order.quantities.length !== MAIN_ITEMS.length) {
+    order.quantities = new Array(MAIN_ITEMS.length).fill(0);
+  }
+  ensureOtherQuantities(order);
+}
+
+function formatOtherSummary(order) {
+  ensureOtherQuantities(order);
+  const parts = [];
+  let total = 0;
+  OTHER_ITEMS.forEach((item, i) => {
+    const q = order.otherQuantities[i] || 0;
+    if (q > 0) {
+      total += q;
+      const short = item.name.length > 14 ? item.name.slice(0, 14) + '…' : item.name;
+      parts.push(`${short}×${q}`);
+    }
+  });
+  return {
+    total,
+    html: parts.length ? parts.join('<br>') : '—'
+  };
+}
+
+function openOtherModal(orderId) {
+  const o = orders.find(x => x.id === orderId);
+  if (!o) return;
+  editingOtherOrderId = orderId;
+  ensureOtherQuantities(o);
+
+  const search = document.getElementById('otherSearch');
+  search.value = '';
+
+  const list = document.getElementById('otherModalList');
+  list.innerHTML = OTHER_ITEMS.map((item, i) => {
+    const val = o.otherQuantities[i] || 0;
+    const opts = [0,1,2,3,4,5,6,7,8]
+      .map(n => `<option value="${n}"${n === val ? ' selected' : ''}>${n}</option>`)
+      .join('');
+    return `
+      <div class="modal-row" data-name="${esc(item.name.toLowerCase())}" data-barcode="${esc(item.barcode)}">
+        <div class="modal-row-name">${esc(item.name)}</div>
+        <select class="qty${val > 0 ? ' nonzero' : ''}" id="otherQty_${i}">${opts}</select>
+      </div>`;
+  }).join('');
+
+  filterOtherModal();
+  document.getElementById('otherModal').classList.add('show');
+  search.focus();
+}
+
+function filterOtherModal() {
+  const q = document.getElementById('otherSearch').value.trim().toLowerCase().replace(/\s/g, '');
+  const rows = document.querySelectorAll('#otherModalList .modal-row');
+  let visible = 0;
+  rows.forEach(row => {
+    const name = row.dataset.name || '';
+    const barcode = row.dataset.barcode || '';
+    const match = !q || name.includes(q) || barcode.includes(q);
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  document.getElementById('otherModalEmpty').style.display = visible ? 'none' : '';
+}
+
+function closeOtherModal() {
+  editingOtherOrderId = null;
+  document.getElementById('otherModal').classList.remove('show');
+}
+
+function saveOtherModal() {
+  const o = orders.find(x => x.id === editingOtherOrderId);
+  if (!o) { closeOtherModal(); return; }
+  ensureOtherQuantities(o);
+  OTHER_ITEMS.forEach((_, i) => {
+    const sel = document.getElementById(`otherQty_${i}`);
+    o.otherQuantities[i] = sel ? parseInt(sel.value, 10) : 0;
+  });
+  closeOtherModal();
+  renderTable();
+}
+
 function setField(id, field, val) {
   const o = orders.find(x => x.id === id);
   if (o) o[field] = val;
+}
+
+function setExpress(id, checked) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  o.express = checked;
+  renderTable();
 }
 
 function removeOrder(id) {
@@ -637,7 +917,7 @@ function undoClear() {
 // ===================== 生成 Excel =====================
 function generateExcel() {
   if (orders.length === 0) { showToast('请先添加订单', 'err'); return; }
-  if (!parseStartTrack() && orders.some(o => !makeTrackNum(o.offset))) {
+  if (!parseStartTrack() && orders.some(o => !makeTrackNum(o.offset, o.express))) {
     if (!confirm('起始单号未填写，导出文件中单号将为空，确认继续？')) return;
   }
 
@@ -656,11 +936,30 @@ function generateExcel() {
   const aoa = [HEADERS];
 
   for (const o of orders) {
-    const tn = makeTrackNum(o.offset);
-    const activeItems = ITEMS.filter((_, i) => o.quantities[i] > 0);
+    migrateOrder(o);
+    const tn = makeTrackNum(o.offset, o.express);
+    const rows = [];
 
-    if (activeItems.length === 0) {
-      // No items selected — still output one row (for address reference)
+    for (let i = 0; i < MAIN_ITEMS.length; i++) {
+      if (o.quantities[i] > 0) {
+        rows.push({
+          name: MAIN_ITEMS[i].name,
+          barcode: MAIN_ITEMS[i].barcode,
+          qty: o.quantities[i]
+        });
+      }
+    }
+    for (let i = 0; i < OTHER_ITEMS.length; i++) {
+      if (o.otherQuantities[i] > 0) {
+        rows.push({
+          name: OTHER_ITEMS[i].name,
+          barcode: OTHER_ITEMS[i].barcode,
+          qty: o.otherQuantities[i]
+        });
+      }
+    }
+
+    if (rows.length === 0) {
       aoa.push([
         tn, o.name, o.province, o.city, o.district,
         o.addrStr, '', o.mobile, '',
@@ -668,16 +967,14 @@ function generateExcel() {
         '', senderName, senderPhone, senderAddr
       ]);
     } else {
-      for (let i = 0; i < ITEMS.length; i++) {
-        if (o.quantities[i] > 0) {
-          aoa.push([
-            tn, o.name, o.province, o.city, o.district,
-            o.addrStr, '', o.mobile, '',
-            1, 'N',
-            ITEMS[i].name, ITEMS[i].barcode, o.quantities[i],
-            '', senderName, senderPhone, senderAddr
-          ]);
-        }
+      for (const row of rows) {
+        aoa.push([
+          tn, o.name, o.province, o.city, o.district,
+          o.addrStr, '', o.mobile, '',
+          1, 'N',
+          row.name, row.barcode, row.qty,
+          '', senderName, senderPhone, senderAddr
+        ]);
       }
     }
   }
@@ -729,12 +1026,15 @@ function showToast(msg, type = '') {
 
 // ===================== Keyboard shortcut =====================
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeOtherModal();
   if (e.ctrlKey && e.key === 'Enter') {
     if (document.activeElement && document.activeElement.id === 'addrInput') {
       addOrder();
     }
   }
 });
+
+updateTrackPreview();
 </script>
 </body>
 </html>
